@@ -10,7 +10,6 @@ COLOR_BG = (10, 138, 252)
 COLOR_OBSTACLE = (252, 22, 10)
 COLOR_PLAYER = (236, 252, 10)
 
-
 class Obstacle:
     GAP_SIZE = 180
     MIN_PADDING = 64
@@ -19,6 +18,7 @@ class Obstacle:
     def __init__(self, x_pos, gap_y_level):
         self.x_pos = x_pos
         self.gap_y_level = gap_y_level
+        self.already_passed = False
 
     def update(self, dt):
         self.x_pos -= Obstacle.SPEED * dt
@@ -32,6 +32,30 @@ class Obstacle:
 
     def is_off_screen(self):
         return self.x_pos + Obstacle.WIDTH < 0
+
+    def collides_with_player(self, player_x, player_y):
+        closest_x = player_x
+
+        if player_x < self.x_pos:
+            closest_x = self.x_pos
+        elif player_x > self.x_pos + Obstacle.WIDTH:
+            closest_x = self.x_pos + Obstacle.WIDTH
+
+        dx = player_x-closest_x
+
+        dy = min(abs(player_y - self.gap_y_level - Obstacle.GAP_SIZE//2), abs(player_y-self.gap_y_level + Obstacle.GAP_SIZE//2))
+
+        if player_y < self.gap_y_level - Obstacle.GAP_SIZE//2 or player_y > self.gap_y_level + Obstacle.GAP_SIZE//2:
+            dy = 0
+
+        return dx*dx + dy*dy <= Player.RADIUS*Player.RADIUS
+
+    def count_as_passed(self, player_x, player_y):
+        if self.already_passed:
+            return False
+        elif self.x_pos < player_x:
+            self.already_passed = True
+            return True
 
 class Player:
     RADIUS = 20
@@ -56,6 +80,10 @@ class Player:
     def draw(self, screen):
         pygame.draw.circle(screen, COLOR_PLAYER, (Player.X_POS, self.y_pos), Player.RADIUS)
 
+    def restart(self):
+        self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH-Player.RADIUS-1
+        self.y_vel = 0
+
 
 class Game:
     def __init__(self):
@@ -71,7 +99,11 @@ class Game:
         self.score = 0
 
     def restart(self):
-        pass
+        self.score = 0
+        self.player.restart()
+        self.obstacles = []
+        self.spawn_obstacle(WINDOW_WIDTH)
+        self.spawn_obstacle(WINDOW_WIDTH*1.5)
 
     def spawn_obstacle(self, x_pos):
         self.obstacles.append(Obstacle(x_pos, random.randint(self.obstacle_range[0], self.obstacle_range[1])))
@@ -79,6 +111,10 @@ class Game:
     def update(self, dt):
         for ob in self.obstacles:
             ob.update(dt)
+            if ob.collides_with_player(self.player.X_POS, self.player.y_pos):
+                self.restart()
+            if ob.count_as_passed(self.player.X_POS, self.player.y_pos):
+                self.score += 1
 
         self.obstacles = [ob for ob in self.obstacles if not ob.is_off_screen()]
 
@@ -102,7 +138,7 @@ class Game:
 
         self.player.draw(screen)
 
-        text_surface = self.font.render(f"score: {1}", True, (255, 255, 255))
+        text_surface = self.font.render(f"score: {self.score}", True, (255, 255, 255))
         screen.blit(text_surface, (5, 5))
 
 
