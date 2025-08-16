@@ -1,10 +1,8 @@
 import pygame
 import random
 
-pygame.init()
-
-WINDOW_WIDTH = 1080
-WINDOW_HEIGHT = 480
+WINDOW_WIDTH = 1280
+WINDOW_HEIGHT = 640
 LEVEL_BOUNDS_WIDTH = 48
 
 COLOR_BOUNDS = (67, 98, 125)
@@ -12,26 +10,25 @@ COLOR_BG = (10, 138, 252)
 COLOR_OBSTACLE = (252, 22, 10)
 COLOR_PLAYER = (236, 252, 10)
 
-screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-clock = pygame.time.Clock()
 
 class Obstacle:
-    GAP_SIZE = 128
+    GAP_SIZE = 180
+    MIN_PADDING = 64
     WIDTH = 64
     SPEED = 256
-    def __init__(self, x_pos, bottom_row_height):
+    def __init__(self, x_pos, gap_y_level):
         self.x_pos = x_pos
-        self.bottom_row_height = bottom_row_height
+        self.gap_y_level = gap_y_level
 
     def update(self, dt):
         self.x_pos -= Obstacle.SPEED * dt
 
     def draw(self, screen):
         pygame.draw.rect(screen, COLOR_OBSTACLE, 
-        (self.x_pos, self.bottom_row_height, Obstacle.WIDTH, WINDOW_HEIGHT-self.bottom_row_height-LEVEL_BOUNDS_WIDTH))
+        (self.x_pos, self.gap_y_level+Obstacle.GAP_SIZE//2, Obstacle.WIDTH, WINDOW_HEIGHT))
 
         pygame.draw.rect(screen, COLOR_OBSTACLE, 
-        (self.x_pos, LEVEL_BOUNDS_WIDTH, Obstacle.WIDTH, self.bottom_row_height-LEVEL_BOUNDS_WIDTH-Obstacle.GAP_SIZE))
+        (self.x_pos, LEVEL_BOUNDS_WIDTH, Obstacle.WIDTH, self.gap_y_level-LEVEL_BOUNDS_WIDTH-Obstacle.GAP_SIZE//2))
 
     def is_off_screen(self):
         return self.x_pos + Obstacle.WIDTH < 0
@@ -39,12 +36,22 @@ class Obstacle:
 class Player:
     RADIUS = 20
     X_POS = 100
+    GRAVITY  = WINDOW_HEIGHT*2
+    JUMP_VEL = GRAVITY//3
     def __init__(self):
         self.radius = Player.RADIUS
         self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH-Player.RADIUS-1
+        self.y_vel = 0
 
     def update(self, dt):
-        pass
+        self.y_vel += Player.GRAVITY * dt
+        self.y_pos += self.y_vel*dt
+        
+        if self.y_pos > WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH - Player.RADIUS:
+            self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH - Player.RADIUS
+
+    def jump(self):
+        self.y_vel = -Player.JUMP_VEL
 
     def draw(self, screen):
         pygame.draw.circle(screen, COLOR_PLAYER, (Player.X_POS, self.y_pos), Player.RADIUS)
@@ -55,17 +62,33 @@ class Game:
         self.player = Player()
         self.obstacles = []
 
-        self.obstacles.append(Obstacle(WINDOW_WIDTH, random.randint(WINDOW_HEIGHT//2-64, WINDOW_HEIGHT//2+64)))
-        self.obstacles.append(Obstacle(WINDOW_WIDTH*1.5, random.randint(WINDOW_HEIGHT//2-64, WINDOW_HEIGHT//2+64)))
-        self.obstacles.append(Obstacle(WINDOW_WIDTH*2, random.randint(WINDOW_HEIGHT//2-64, WINDOW_HEIGHT//2+64)))
+        obstacle_offset_range = (WINDOW_HEIGHT - LEVEL_BOUNDS_WIDTH*2 - Obstacle.GAP_SIZE - Obstacle.MIN_PADDING*2)//2
+        self.obstacle_range = (WINDOW_HEIGHT//2-obstacle_offset_range, WINDOW_HEIGHT//2+obstacle_offset_range)
 
-        self.obstacle_speed = 2.5
+        self.spawn_obstacle(WINDOW_WIDTH)
+        self.spawn_obstacle(WINDOW_WIDTH*1.5)
+        self.font = pygame.font.Font(None, 36)
+        self.score = 0
+
+    def restart(self):
+        pass
+
+    def spawn_obstacle(self, x_pos):
+        self.obstacles.append(Obstacle(x_pos, random.randint(self.obstacle_range[0], self.obstacle_range[1])))
 
     def update(self, dt):
         for ob in self.obstacles:
             ob.update(dt)
 
         self.obstacles = [ob for ob in self.obstacles if not ob.is_off_screen()]
+
+        self.player.update(dt)
+
+        if len(self.obstacles) < 2:
+            self.spawn_obstacle(WINDOW_WIDTH)
+
+    def mouse_click(self):
+        self.player.jump()
 
     def draw(self, screen):
         screen.fill(COLOR_BG)
@@ -79,6 +102,16 @@ class Game:
 
         self.player.draw(screen)
 
+        text_surface = self.font.render(f"score: {1}", True, (255, 255, 255))
+        screen.blit(text_surface, (5, 5))
+
+
+pygame.init()
+pygame.font.init()
+
+screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+clock = pygame.time.Clock()
+
 
 game = Game()
 clock = pygame.time.Clock()  
@@ -90,6 +123,9 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:  # Left click
+                game.mouse_click()
 
     game.update(dt)
     game.draw(screen)
