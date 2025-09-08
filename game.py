@@ -11,7 +11,7 @@ COLOR_OBSTACLE = (252, 22, 10)
 COLOR_PLAYER = (236, 252, 10)
 
 class Obstacle:
-    GAP_SIZE = 180
+    GAP_SIZE = 400
     MIN_PADDING = 64
     WIDTH = 64
     SPEED = 256

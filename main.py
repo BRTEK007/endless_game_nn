@@ -1,10 +1,12 @@
 from game import *
 
+import time
 import argparse
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import EvalCallback
 
 class JetpackEnv(gym.Env):
     def __init__(self, render = False):
@@ -12,6 +14,7 @@ class JetpackEnv(gym.Env):
         self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32)
         self.action_space = spaces.Discrete(2)
         self.game = Game()
+        self._last_score = 0
 
         if render:
             pygame.init()
@@ -22,6 +25,7 @@ class JetpackEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         self.game.restart()
+        self._last_score = 0
         return self._get_obs(), {}
 
     def step(self, action):
@@ -30,8 +34,20 @@ class JetpackEnv(gym.Env):
             self.game.mouse_click()
         self.game.update(1.0 / FPS) # simulate a frame
         obs = self._get_obs()
-        reward = 1.0  # survive = +1
+
+        reward = 0.0
+
+        if self.game.score > self._last_score:
+            reward += 1.0 # passed an obstacle reward
+            self._last_score = self.game.score
+
         done = not self.game.is_playing()  # set to True if crashed
+
+        if done:
+            reward -= 1.0 # crashing penalty
+        else:
+            reward += 0.01 # surviving reward
+    
         truncated = False
         return obs, reward, done, truncated, {}
 
@@ -77,18 +93,45 @@ def play():
 
 def train():
     env = JetpackEnv(render=False)
+    eval_env = JetpackEnv(render=False)
+
+    eval_callback = EvalCallback(
+        eval_env,
+        best_model_save_path="./models/",
+        log_path="./logs/",
+        eval_freq=5000,          # evaluate every 5000 steps
+        deterministic=True,
+        render=False,
+    )
+
     model = PPO("MlpPolicy", env, verbose=1)
-    model.learn(total_timesteps=100_000)
+    model.learn(total_timesteps=100_000, callback=eval_callback)
+  
+def evaluate():
+    env = JetpackEnv(render=True)   # enable rendering
+    model = PPO.load("./models/best_model", env=env)
+
+    obs, _ = env.reset()
+    done, truncated = False, False
+    while True:
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, done, truncated, _ = env.step(action)
+        env.render()
+        time.sleep(1/30)
+        if done or truncated:
+            obs, _ = env.reset()
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--mode", choices=["train", "play"], required=True,
-                    help="Run mode: train or play")
+parser.add_argument("--mode", choices=["train", "play", "eval"], required=True,
+                    help="Run mode: train or play or eval")
 args = parser.parse_args()
 
 if args.mode == "play":
     play()
 elif args.mode == "train":
     train()
+elif args.mode == "eval":
+    evaluate()
 
 # obs, _ = env.reset()
 # for _ in range(1000):
