@@ -1,170 +1,100 @@
-import pygame
-import random
+from game import *
 
-WINDOW_WIDTH = 1280
-WINDOW_HEIGHT = 640
-LEVEL_BOUNDS_WIDTH = 48
+import argparse
+import numpy as np
+import gymnasium as gym
+from gymnasium import spaces
+from stable_baselines3 import PPO
 
-COLOR_BOUNDS = (67, 98, 125)
-COLOR_BG = (10, 138, 252)
-COLOR_OBSTACLE = (252, 22, 10)
-COLOR_PLAYER = (236, 252, 10)
+class JetpackEnv(gym.Env):
+    def __init__(self, render = False):
+        super().__init__()
+        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32)
+        self.action_space = spaces.Discrete(2)
+        self.game = Game()
 
-class Obstacle:
-    GAP_SIZE = 180
-    MIN_PADDING = 64
-    WIDTH = 64
-    SPEED = 256
-    def __init__(self, x_pos, gap_y_level):
-        self.x_pos = x_pos
-        self.gap_y_level = gap_y_level
-        self.already_passed = False
+        if render:
+            pygame.init()
+            pygame.font.init()
 
-    def update(self, dt):
-        self.x_pos -= Obstacle.SPEED * dt
+            self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+            self.font = pygame.font.Font(None, 36)
 
-    def draw(self, screen):
-        pygame.draw.rect(screen, COLOR_OBSTACLE, 
-        (self.x_pos, self.gap_y_level+Obstacle.GAP_SIZE//2, Obstacle.WIDTH, WINDOW_HEIGHT))
+    def reset(self, *, seed=None, options=None):
+        self.game.restart()
+        return self._get_obs(), {}
 
-        pygame.draw.rect(screen, COLOR_OBSTACLE, 
-        (self.x_pos, LEVEL_BOUNDS_WIDTH, Obstacle.WIDTH, self.gap_y_level-LEVEL_BOUNDS_WIDTH-Obstacle.GAP_SIZE//2))
+    def step(self, action):
+        FPS = 30
+        if action == 1:
+            self.game.mouse_click()
+        self.game.update(1.0 / FPS) # simulate a frame
+        obs = self._get_obs()
+        reward = 1.0  # survive = +1
+        done = not self.game.is_playing()  # set to True if crashed
+        truncated = False
+        return obs, reward, done, truncated, {}
 
-    def is_off_screen(self):
-        return self.x_pos + Obstacle.WIDTH < 0
+    def _get_obs(self):
+        return np.array(self.game.game_state(), dtype=np.float32)
 
-    def collides_with_player(self, player_x, player_y):
-        closest_x = player_x
+    def render(self, mode="human"):
+        self.game.draw(self.screen, self.font)
+        pygame.display.flip()
 
-        if player_x < self.x_pos:
-            closest_x = self.x_pos
-        elif player_x > self.x_pos + Obstacle.WIDTH:
-            closest_x = self.x_pos + Obstacle.WIDTH
+    def close(self):
+        pass
 
-        dx = player_x-closest_x
+def play():
+    pygame.init()
+    pygame.font.init()
 
-        dy = min(abs(player_y - self.gap_y_level - Obstacle.GAP_SIZE//2), abs(player_y-self.gap_y_level + Obstacle.GAP_SIZE//2))
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    font = pygame.font.Font(None, 36)
 
-        if player_y < self.gap_y_level - Obstacle.GAP_SIZE//2 or player_y > self.gap_y_level + Obstacle.GAP_SIZE//2:
-            dy = 0
+    game = Game()
+    clock = pygame.time.Clock()  
+    running = True
 
-        return dx*dx + dy*dy <= Player.RADIUS*Player.RADIUS
+    while running:
+        dt = clock.tick(60) / 1000.0
 
-    def count_as_passed(self, player_x, player_y):
-        if self.already_passed:
-            return False
-        elif self.x_pos < player_x:
-            self.already_passed = True
-            return True
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # Left click
+                    game.mouse_click()
 
-class Player:
-    RADIUS = 20
-    X_POS = 100
-    GRAVITY  = WINDOW_HEIGHT*2
-    JUMP_VEL = GRAVITY//3
-    def __init__(self):
-        self.radius = Player.RADIUS
-        self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH-Player.RADIUS-1
-        self.y_vel = 0
+        if game.is_playing() == False:
+            game.restart()
 
-    def update(self, dt):
-        self.y_vel += Player.GRAVITY * dt
-        self.y_pos += self.y_vel*dt
-        
-        if self.y_pos > WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH - Player.RADIUS:
-            self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH - Player.RADIUS
+        game.update(dt)
+        game.draw(screen, font)
+        pygame.display.flip()
 
-    def jump(self):
-        self.y_vel = -Player.JUMP_VEL
+    pygame.quit()
 
-    def draw(self, screen):
-        pygame.draw.circle(screen, COLOR_PLAYER, (Player.X_POS, self.y_pos), Player.RADIUS)
+def train():
+    env = JetpackEnv(render=False)
+    model = PPO("MlpPolicy", env, verbose=1)
+    model.learn(total_timesteps=100_000)
 
-    def restart(self):
-        self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH-Player.RADIUS-1
-        self.y_vel = 0
+parser = argparse.ArgumentParser()
+parser.add_argument("--mode", choices=["train", "play"], required=True,
+                    help="Run mode: train or play")
+args = parser.parse_args()
 
+if args.mode == "play":
+    play()
+elif args.mode == "train":
+    train()
 
-class Game:
-    def __init__(self):
-        self.player = Player()
-        self.obstacles = []
-
-        obstacle_offset_range = (WINDOW_HEIGHT - LEVEL_BOUNDS_WIDTH*2 - Obstacle.GAP_SIZE - Obstacle.MIN_PADDING*2)//2
-        self.obstacle_range = (WINDOW_HEIGHT//2-obstacle_offset_range, WINDOW_HEIGHT//2+obstacle_offset_range)
-
-        self.spawn_obstacle(WINDOW_WIDTH)
-        self.spawn_obstacle(WINDOW_WIDTH*1.5)
-        self.font = pygame.font.Font(None, 36)
-        self.score = 0
-
-    def restart(self):
-        self.score = 0
-        self.player.restart()
-        self.obstacles = []
-        self.spawn_obstacle(WINDOW_WIDTH)
-        self.spawn_obstacle(WINDOW_WIDTH*1.5)
-
-    def spawn_obstacle(self, x_pos):
-        self.obstacles.append(Obstacle(x_pos, random.randint(self.obstacle_range[0], self.obstacle_range[1])))
-
-    def update(self, dt):
-        for ob in self.obstacles:
-            ob.update(dt)
-            if ob.collides_with_player(self.player.X_POS, self.player.y_pos):
-                self.restart()
-            if ob.count_as_passed(self.player.X_POS, self.player.y_pos):
-                self.score += 1
-
-        self.obstacles = [ob for ob in self.obstacles if not ob.is_off_screen()]
-
-        self.player.update(dt)
-
-        if len(self.obstacles) < 2:
-            self.spawn_obstacle(WINDOW_WIDTH)
-
-    def mouse_click(self):
-        self.player.jump()
-
-    def draw(self, screen):
-        screen.fill(COLOR_BG)
-
-        for ob in self.obstacles:
-            ob.draw(screen)
-
-        LEVEL_BOUNDS_WIDTH
-        pygame.draw.rect(screen, COLOR_BOUNDS, (0, 0, WINDOW_WIDTH, LEVEL_BOUNDS_WIDTH))
-        pygame.draw.rect(screen, COLOR_BOUNDS, (0, WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH, WINDOW_WIDTH, LEVEL_BOUNDS_WIDTH))
-
-        self.player.draw(screen)
-
-        text_surface = self.font.render(f"score: {self.score}", True, (255, 255, 255))
-        screen.blit(text_surface, (5, 5))
-
-
-pygame.init()
-pygame.font.init()
-
-screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-clock = pygame.time.Clock()
-
-
-game = Game()
-clock = pygame.time.Clock()  
-running = True
-
-while running:
-    dt = clock.tick(60) / 1000.0
-
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:  # Left click
-                game.mouse_click()
-
-    game.update(dt)
-    game.draw(screen)
-    pygame.display.flip()
-
-pygame.quit()
+# obs, _ = env.reset()
+# for _ in range(1000):
+#     pygame.time.wait(100)
+#     env.render()
+#     action, _ = model.predict(obs, deterministic=True)
+#     obs, reward, terminated, truncated, _ = env.step(action)
+#     if terminated or truncated:
+#         obs, _ = env.reset()
