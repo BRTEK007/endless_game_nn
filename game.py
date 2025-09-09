@@ -9,9 +9,10 @@ COLOR_BOUNDS = (67, 98, 125)
 COLOR_BG = (10, 138, 252)
 COLOR_OBSTACLE = (252, 22, 10)
 COLOR_PLAYER = (236, 252, 10)
+OBSTACLES_ON_SCREEN = 4
 
 class Obstacle:
-    GAP_SIZE = 400
+    GAP_SIZE = 200
     MIN_PADDING = 64
     WIDTH = 64
     SPEED = 256
@@ -101,8 +102,10 @@ class Game:
         obstacle_offset_range = (WINDOW_HEIGHT - LEVEL_BOUNDS_WIDTH*2 - Obstacle.GAP_SIZE - Obstacle.MIN_PADDING*2)//2
         self.obstacle_range = (WINDOW_HEIGHT//2-obstacle_offset_range, WINDOW_HEIGHT//2+obstacle_offset_range)
 
-        self.spawn_obstacle(WINDOW_WIDTH)
-        self.spawn_obstacle(WINDOW_WIDTH*1.5)
+
+        for i in range(0, OBSTACLES_ON_SCREEN):
+            self.spawn_obstacle(WINDOW_WIDTH//2 + i * WINDOW_WIDTH//OBSTACLES_ON_SCREEN)
+        
         self.score = 0
 
         self._is_playing = True
@@ -111,8 +114,10 @@ class Game:
         self.score = 0
         self.player.restart()
         self.obstacles = []
-        self.spawn_obstacle(WINDOW_WIDTH)
-        self.spawn_obstacle(WINDOW_WIDTH*1.5)
+        
+        for i in range(0, OBSTACLES_ON_SCREEN):
+            self.spawn_obstacle(WINDOW_WIDTH//2 + i * WINDOW_WIDTH//OBSTACLES_ON_SCREEN)
+
         self._is_playing = True
 
     def spawn_obstacle(self, x_pos):
@@ -133,8 +138,11 @@ class Game:
 
         self.player.update(dt)
 
-        if len(self.obstacles) < 2:
+        if len(self.obstacles) < OBSTACLES_ON_SCREEN:
             self.spawn_obstacle(WINDOW_WIDTH)
+
+        if self.score >= 16:
+            self._is_playing = False#TODO
 
     def mouse_click(self):
         self.player.jump()

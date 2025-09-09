@@ -104,7 +104,8 @@ def train():
         render=False,
     )
 
-    model = PPO("MlpPolicy", env, verbose=1)
+    # model = PPO("MlpPolicy", env, verbose=1)
+    model = PPO.load("./models/base_model", env=env)
     model.learn(total_timesteps=100_000, callback=eval_callback)
   
 def evaluate():
