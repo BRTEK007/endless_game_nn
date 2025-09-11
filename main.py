@@ -161,12 +161,3 @@ elif args.mode == "eval":
         print("--file argument needed")
         exit(1)
     evaluate(args.file, args.dens, args.gap)
-
-# obs, _ = env.reset()
-# for _ in range(1000):
-#     pygame.time.wait(100)
-#     env.render()
-#     action, _ = model.predict(obs, deterministic=True)
-#     obs, reward, terminated, truncated, _ = env.step(action)
-#     if terminated or truncated:
-#         obs, _ = env.reset()
