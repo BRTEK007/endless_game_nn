@@ -22,7 +22,7 @@ Adjustable game parameters:
 
 # Training process
 
-An MlpPolicy from Stable-Baselines3 is used. Model was trained with decreasing obstacle gap, starting from 300 and going as low as 120. The previous model was always used as a starting point. Untrained model struggles to find random success in the beggining for obstacle density < 3. During training the game was limited to stop after the player passes 12 obstacles.
+An MlpPolicy from Stable-Baselines3 is used. Models were trained with decreasing obstacle gap, with the model trained on the higher gap used as a starting point for new training. Untrained model struggles to find random success in the beggining for obstacle density < 3. During training the game was limited to stop after the player passes 12 obstacles.
 
 # Example training
 ```

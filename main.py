@@ -127,7 +127,7 @@ def train(initial_model_file, obstacle_density, obstacle_gap_size):
         model = PPO("MlpPolicy", env, verbose=1)
     else:
         model = PPO.load(f"./models/{initial_model_file}", env=env)
-    model.learn(total_timesteps=100_000, callback=eval_callback)
+    model.learn(total_timesteps=100_00, callback=eval_callback)
   
 def test(initial_model_file, obstacle_density, obstacle_gap_size):
     env = JetpackEnv(render=True, obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 100)
