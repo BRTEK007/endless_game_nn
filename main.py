@@ -6,15 +6,20 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
 
 class JetpackEnv(gym.Env):
-    def __init__(self, render = False):
+    def __init__(self, render = False, obstacle_density = 2, obstacle_gap_size = 200, score_to_pass = 12):
         super().__init__()
         self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32)
         self.action_space = spaces.Discrete(2)
-        self.game = Game()
+        self.game = Game(obstacle_density = obstacle_density,
+         obstacle_gap_size = obstacle_gap_size, score_to_pass = score_to_pass)
         self._last_score = 0
+
+        self.obstacle_density = obstacle_density
+        self.obstacle_gap_size = obstacle_gap_size
+        self.score_to_pass = score_to_pass
 
         if render:
             pygame.init()
@@ -43,7 +48,7 @@ class JetpackEnv(gym.Env):
 
         done = not self.game.is_playing()  # set to True if crashed
 
-        if done:
+        if done and not self.game.is_won():
             reward -= 1.0 # crashing penalty
         else:
             reward += 0.01 # surviving reward
@@ -61,14 +66,15 @@ class JetpackEnv(gym.Env):
     def close(self):
         pass
 
-def play():
+
+def play(obstacle_density, obstacle_gap_size):
     pygame.init()
     pygame.font.init()
 
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     font = pygame.font.Font(None, 36)
 
-    game = Game()
+    game = Game(obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 100)
     clock = pygame.time.Clock()  
     running = True
 
@@ -91,26 +97,36 @@ def play():
 
     pygame.quit()
 
-def train():
-    env = JetpackEnv(render=False)
-    eval_env = JetpackEnv(render=False)
+def train(initial_model_file, obstacle_density, obstacle_gap_size):
+
+    env = JetpackEnv(render=False, obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 12)
+    eval_env = JetpackEnv(render=False, obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 12)
+
+    stop_callback = StopTrainingOnNoModelImprovement(
+        max_no_improvement_evals=10,    
+        min_evals=5,                    # how many evals to wait before checking      
+        verbose=1
+    )
 
     eval_callback = EvalCallback(
         eval_env,
-        best_model_save_path="./models/",
+        best_model_save_path=f"./models/dens_{obstacle_density}_gap_{obstacle_gap_size}",
         log_path="./logs/",
         eval_freq=5000,          # evaluate every 5000 steps
         deterministic=True,
         render=False,
+        callback_after_eval=stop_callback
     )
 
-    # model = PPO("MlpPolicy", env, verbose=1)
-    model = PPO.load("./models/base_model", env=env)
+    if initial_model_file is None:
+        model = PPO("MlpPolicy", env, verbose=1)
+    else:
+        model = PPO.load(f"./models/{initial_model_file}", env=env)
     model.learn(total_timesteps=100_000, callback=eval_callback)
   
-def evaluate():
-    env = JetpackEnv(render=True)   # enable rendering
-    model = PPO.load("./models/best_model", env=env)
+def evaluate(initial_model_file, obstacle_density, obstacle_gap_size):
+    env = JetpackEnv(render=True, obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 100)
+    model = PPO.load(f"./models/{initial_model_file}", env=env)
 
     obs, _ = env.reset()
     done, truncated = False, False
@@ -124,15 +140,27 @@ def evaluate():
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["train", "play", "eval"], required=True,
-                    help="Run mode: train or play or eval")
+                    help="Run mode: train or play or eval.")
+parser.add_argument("--file",
+                    help="The model to start training with or to evaluate, leave empty for new model. Path should be relative to models directory.")
+
+parser.add_argument("--dens", type=int, required=True,
+                    help="How many obstacles on the screen.")
+
+parser.add_argument("--gap", type=int, required=True,
+                    help="Obstacle gap size")
+
 args = parser.parse_args()
 
 if args.mode == "play":
-    play()
+    play(args.dens, args.gap)
 elif args.mode == "train":
-    train()
+    train(args.file, args.dens, args.gap)
 elif args.mode == "eval":
-    evaluate()
+    if args.file == None:
+        print("--file argument needed")
+        exit(1)
+    evaluate(args.file, args.dens, args.gap)
 
 # obs, _ = env.reset()
 # for _ in range(1000):

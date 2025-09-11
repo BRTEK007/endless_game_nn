@@ -9,27 +9,26 @@ COLOR_BOUNDS = (67, 98, 125)
 COLOR_BG = (10, 138, 252)
 COLOR_OBSTACLE = (252, 22, 10)
 COLOR_PLAYER = (236, 252, 10)
-OBSTACLES_ON_SCREEN = 4
 
 class Obstacle:
-    GAP_SIZE = 200
-    MIN_PADDING = 64
+    MIN_PADDING = 32
     WIDTH = 64
     SPEED = 256
-    def __init__(self, x_pos, gap_y_level):
+    def __init__(self, x_pos, gap_y_level, gap_size):
         self.x_pos = x_pos
         self.gap_y_level = gap_y_level
         self.already_passed = False
+        self.gap_size = gap_size
 
     def update(self, dt):
         self.x_pos -= Obstacle.SPEED * dt
 
     def draw(self, screen):
         pygame.draw.rect(screen, COLOR_OBSTACLE, 
-        (self.x_pos, self.gap_y_level+Obstacle.GAP_SIZE//2, Obstacle.WIDTH, WINDOW_HEIGHT))
+        (self.x_pos, self.gap_y_level+self.gap_size//2, Obstacle.WIDTH, WINDOW_HEIGHT))
 
         pygame.draw.rect(screen, COLOR_OBSTACLE, 
-        (self.x_pos, LEVEL_BOUNDS_WIDTH, Obstacle.WIDTH, self.gap_y_level-LEVEL_BOUNDS_WIDTH-Obstacle.GAP_SIZE//2))
+        (self.x_pos, LEVEL_BOUNDS_WIDTH, Obstacle.WIDTH, self.gap_y_level-LEVEL_BOUNDS_WIDTH-self.gap_size//2))
 
     def is_off_screen(self):
         return self.x_pos + Obstacle.WIDTH < 0
@@ -44,9 +43,9 @@ class Obstacle:
 
         dx = player_x-closest_x
 
-        dy = min(abs(player_y - self.gap_y_level - Obstacle.GAP_SIZE//2), abs(player_y-self.gap_y_level + Obstacle.GAP_SIZE//2))
+        dy = min(abs(player_y - self.gap_y_level - self.gap_size//2), abs(player_y-self.gap_y_level + self.gap_size//2))
 
-        if player_y < self.gap_y_level - Obstacle.GAP_SIZE//2 or player_y > self.gap_y_level + Obstacle.GAP_SIZE//2:
+        if player_y < self.gap_y_level - self.gap_size//2 or player_y > self.gap_y_level + self.gap_size//2:
             dy = 0
 
         return dx*dx + dy*dy <= Player.RADIUS*Player.RADIUS
@@ -65,7 +64,7 @@ class Player:
     JUMP_VEL = GRAVITY//3
     def __init__(self):
         self.radius = Player.RADIUS
-        self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH-Player.RADIUS-1
+        self.y_pos = WINDOW_HEIGHT//2-Player.RADIUS-1
         self.y_vel = 0
 
     def update(self, dt):
@@ -91,37 +90,41 @@ class Player:
         pygame.draw.circle(screen, COLOR_PLAYER, (Player.X_POS, self.y_pos), Player.RADIUS)
 
     def restart(self):
-        self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH-Player.RADIUS-1
+        self.y_pos = WINDOW_HEIGHT//2-Player.RADIUS-1
         self.y_vel = 0
 
 class Game:
-    def __init__(self, render = False):
+    def __init__(self, obstacle_density, obstacle_gap_size, score_to_pass):
         self.player = Player()
         self.obstacles = []
 
-        obstacle_offset_range = (WINDOW_HEIGHT - LEVEL_BOUNDS_WIDTH*2 - Obstacle.GAP_SIZE - Obstacle.MIN_PADDING*2)//2
+        self.obstacle_density = obstacle_density
+        self.obstacle_gap_size = obstacle_gap_size
+        self.score_to_pass = score_to_pass
+
+        obstacle_offset_range = (WINDOW_HEIGHT - LEVEL_BOUNDS_WIDTH*2 - self.obstacle_gap_size - Obstacle.MIN_PADDING*2)//2
         self.obstacle_range = (WINDOW_HEIGHT//2-obstacle_offset_range, WINDOW_HEIGHT//2+obstacle_offset_range)
 
-
-        for i in range(0, OBSTACLES_ON_SCREEN):
-            self.spawn_obstacle(WINDOW_WIDTH//2 + i * WINDOW_WIDTH//OBSTACLES_ON_SCREEN)
+        for i in range(0, self.obstacle_density):
+            self.spawn_obstacle(WINDOW_WIDTH//2 + i * WINDOW_WIDTH//self.obstacle_density)
         
         self.score = 0
 
         self._is_playing = True
+        self._passed_score = False
 
     def restart(self):
         self.score = 0
         self.player.restart()
         self.obstacles = []
         
-        for i in range(0, OBSTACLES_ON_SCREEN):
-            self.spawn_obstacle(WINDOW_WIDTH//2 + i * WINDOW_WIDTH//OBSTACLES_ON_SCREEN)
+        for i in range(0, self.obstacle_density):
+            self.spawn_obstacle(WINDOW_WIDTH//2 + i * WINDOW_WIDTH//self.obstacle_density)
 
         self._is_playing = True
 
     def spawn_obstacle(self, x_pos):
-        self.obstacles.append(Obstacle(x_pos, random.randint(self.obstacle_range[0], self.obstacle_range[1])))
+        self.obstacles.append(Obstacle(x_pos, random.randint(self.obstacle_range[0], self.obstacle_range[1]), self.obstacle_gap_size))
 
     def update(self, dt):
         if self._is_playing == False:
@@ -138,11 +141,12 @@ class Game:
 
         self.player.update(dt)
 
-        if len(self.obstacles) < OBSTACLES_ON_SCREEN:
+        if len(self.obstacles) < self.obstacle_density:
             self.spawn_obstacle(WINDOW_WIDTH)
 
-        if self.score >= 16:
-            self._is_playing = False#TODO
+        if self.score >= self.score_to_pass:
+            self._is_playing = False
+            self._passed_score = True
 
     def mouse_click(self):
         self.player.jump()
@@ -164,6 +168,9 @@ class Game:
 
     def is_playing(self):
         return self._is_playing
+
+    def is_won(self):
+        return self._passed_score
 
     def game_state(self):
         """
