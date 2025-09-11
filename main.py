@@ -8,6 +8,8 @@ from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
 
+import pandas as pd
+
 class JetpackEnv(gym.Env):
     def __init__(self, render = False, obstacle_density = 2, obstacle_gap_size = 200, score_to_pass = 12):
         super().__init__()
@@ -55,6 +57,9 @@ class JetpackEnv(gym.Env):
     
         truncated = False
         return obs, reward, done, truncated, {}
+
+    def get_score(self):
+        return self.game.score
 
     def _get_obs(self):
         return np.array(self.game.game_state(), dtype=np.float32)
@@ -124,7 +129,7 @@ def train(initial_model_file, obstacle_density, obstacle_gap_size):
         model = PPO.load(f"./models/{initial_model_file}", env=env)
     model.learn(total_timesteps=100_000, callback=eval_callback)
   
-def evaluate(initial_model_file, obstacle_density, obstacle_gap_size):
+def test(initial_model_file, obstacle_density, obstacle_gap_size):
     env = JetpackEnv(render=True, obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 100)
     model = PPO.load(f"./models/{initial_model_file}", env=env)
 
@@ -138,8 +143,38 @@ def evaluate(initial_model_file, obstacle_density, obstacle_gap_size):
         if done or truncated:
             obs, _ = env.reset()
 
+def evaluate(model_file, obstacle_density, obstacle_gap_size):
+    RUNS = 50
+    MAX_SCORE = 100
+   
+    env = JetpackEnv(render=False, obstacle_density = obstacle_density,
+    obstacle_gap_size = obstacle_gap_size, score_to_pass = MAX_SCORE)
+    model = PPO.load(f"./models/{model_file}", env=env)
+
+
+    scores = []
+
+    print()
+    print(f"Evaluation for {RUNS} runs, with max score limit {MAX_SCORE}")
+    print()
+
+    obs, _ = env.reset()
+    done, truncated = False, False
+    while len(scores) < RUNS:
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, done, truncated, _ = env.step(action)
+        if done or truncated or env.get_score() >= MAX_SCORE:
+            scores.append(env.get_score())
+            print(f"score: {env.get_score()}")
+            obs, _ = env.reset()
+            done, truncated = False, False
+
+    print()
+    df = pd.DataFrame(scores, columns=["score"])
+    print(df.describe())
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--mode", choices=["train", "play", "test"], required=True,
+parser.add_argument("--mode", choices=["train", "play", "test", "eval"], required=True,
                     help="Run mode: train or play or test.")
 parser.add_argument("--file",
                     help="The model to start training with or to evaluate, leave empty for new model. Path should be relative to models directory.")
@@ -157,6 +192,11 @@ if args.mode == "play":
 elif args.mode == "train":
     train(args.file, args.dens, args.gap)
 elif args.mode == "test":
+    if args.file == None:
+        print("--file argument needed")
+        exit(1)
+    test(args.file, args.dens, args.gap)
+elif args.mode == "eval":
     if args.file == None:
         print("--file argument needed")
         exit(1)
