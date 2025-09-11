@@ -139,8 +139,8 @@ def evaluate(initial_model_file, obstacle_density, obstacle_gap_size):
             obs, _ = env.reset()
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--mode", choices=["train", "play", "eval"], required=True,
-                    help="Run mode: train or play or eval.")
+parser.add_argument("--mode", choices=["train", "play", "test"], required=True,
+                    help="Run mode: train or play or test.")
 parser.add_argument("--file",
                     help="The model to start training with or to evaluate, leave empty for new model. Path should be relative to models directory.")
 
@@ -156,7 +156,7 @@ if args.mode == "play":
     play(args.dens, args.gap)
 elif args.mode == "train":
     train(args.file, args.dens, args.gap)
-elif args.mode == "eval":
+elif args.mode == "test":
     if args.file == None:
         print("--file argument needed")
         exit(1)

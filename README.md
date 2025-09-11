@@ -5,7 +5,7 @@ Simple endless runner game, player has to pass oncoming obstacles. Player only h
 ### training
 Trains simple Neural network to play the game.
 
-### evaluation
+### testing
 Evaluates chosen model in real time.
 
 ### playing
@@ -26,9 +26,9 @@ An MlpPolicy from Stable-Baselines3 is used. Model was trained with decreasing o
 python3 main.py --mode train --file dens_3_gap_120/best_model.zip --dens 3 --gap 120
 ```
 
-# Example evaluation
+# Example testing
 ```
-python3 main.py --mode eval --file dens_3_gap_120/best_model.zip --dens 3 --gap 120
+python3 main.py --mode test --file dens_3_gap_120/best_model.zip --dens 3 --gap 120
 ```
 
 # Example playing
