@@ -1,170 +1,226 @@
-import pygame
-import random
+from game import *
 
-WINDOW_WIDTH = 1280
-WINDOW_HEIGHT = 640
-LEVEL_BOUNDS_WIDTH = 48
+import time
+import argparse
+import numpy as np
+import gymnasium as gym
+from gymnasium import spaces
+from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
 
-COLOR_BOUNDS = (67, 98, 125)
-COLOR_BG = (10, 138, 252)
-COLOR_OBSTACLE = (252, 22, 10)
-COLOR_PLAYER = (236, 252, 10)
+import pandas as pd
+import cv2
 
-class Obstacle:
-    GAP_SIZE = 180
-    MIN_PADDING = 64
-    WIDTH = 64
-    SPEED = 256
-    def __init__(self, x_pos, gap_y_level):
-        self.x_pos = x_pos
-        self.gap_y_level = gap_y_level
-        self.already_passed = False
+class JetpackEnv(gym.Env):
+    def __init__(self, render = False, obstacle_density = 2, obstacle_gap_size = 200, score_to_pass = 12):
+        super().__init__()
+        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32)
+        self.action_space = spaces.Discrete(2)
+        self.game = Game(obstacle_density = obstacle_density,
+         obstacle_gap_size = obstacle_gap_size, score_to_pass = score_to_pass)
+        self._last_score = 0
 
-    def update(self, dt):
-        self.x_pos -= Obstacle.SPEED * dt
+        self.obstacle_density = obstacle_density
+        self.obstacle_gap_size = obstacle_gap_size
+        self.score_to_pass = score_to_pass
 
-    def draw(self, screen):
-        pygame.draw.rect(screen, COLOR_OBSTACLE, 
-        (self.x_pos, self.gap_y_level+Obstacle.GAP_SIZE//2, Obstacle.WIDTH, WINDOW_HEIGHT))
+        if render:
+            pygame.init()
+            pygame.font.init()
 
-        pygame.draw.rect(screen, COLOR_OBSTACLE, 
-        (self.x_pos, LEVEL_BOUNDS_WIDTH, Obstacle.WIDTH, self.gap_y_level-LEVEL_BOUNDS_WIDTH-Obstacle.GAP_SIZE//2))
+            self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+            self.font = pygame.font.Font(None, 36)
 
-    def is_off_screen(self):
-        return self.x_pos + Obstacle.WIDTH < 0
+    def reset(self, *, seed=None, options=None):
+        self.game.restart()
+        self._last_score = 0
+        return self._get_obs(), {}
 
-    def collides_with_player(self, player_x, player_y):
-        closest_x = player_x
+    def step(self, action):
+        FPS = 30
+        if action == 1:
+            self.game.mouse_click()
+        self.game.update(1.0 / FPS) # simulate a frame
+        obs = self._get_obs()
 
-        if player_x < self.x_pos:
-            closest_x = self.x_pos
-        elif player_x > self.x_pos + Obstacle.WIDTH:
-            closest_x = self.x_pos + Obstacle.WIDTH
+        reward = 0.0
 
-        dx = player_x-closest_x
+        if self.game.score > self._last_score:
+            reward += 1.0 # passed an obstacle reward
+            self._last_score = self.game.score
 
-        dy = min(abs(player_y - self.gap_y_level - Obstacle.GAP_SIZE//2), abs(player_y-self.gap_y_level + Obstacle.GAP_SIZE//2))
+        done = not self.game.is_playing()  # set to True if crashed
 
-        if player_y < self.gap_y_level - Obstacle.GAP_SIZE//2 or player_y > self.gap_y_level + Obstacle.GAP_SIZE//2:
-            dy = 0
+        if done and not self.game.is_won():
+            reward -= 1.0 # crashing penalty
+        else:
+            reward += 0.01 # surviving reward
+    
+        truncated = False
+        return obs, reward, done, truncated, {}
 
-        return dx*dx + dy*dy <= Player.RADIUS*Player.RADIUS
+    def get_score(self):
+        return self.game.score
 
-    def count_as_passed(self, player_x, player_y):
-        if self.already_passed:
-            return False
-        elif self.x_pos < player_x:
-            self.already_passed = True
-            return True
+    def get_screen(self):
+        return self.screen
 
-class Player:
-    RADIUS = 20
-    X_POS = 100
-    GRAVITY  = WINDOW_HEIGHT*2
-    JUMP_VEL = GRAVITY//3
-    def __init__(self):
-        self.radius = Player.RADIUS
-        self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH-Player.RADIUS-1
-        self.y_vel = 0
+    def _get_obs(self):
+        return np.array(self.game.game_state(), dtype=np.float32)
 
-    def update(self, dt):
-        self.y_vel += Player.GRAVITY * dt
-        self.y_pos += self.y_vel*dt
-        
-        if self.y_pos > WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH - Player.RADIUS:
-            self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH - Player.RADIUS
+    def render(self, mode="human"):
+        self.game.draw(self.screen, self.font)
+        pygame.display.flip()
 
-    def jump(self):
-        self.y_vel = -Player.JUMP_VEL
-
-    def draw(self, screen):
-        pygame.draw.circle(screen, COLOR_PLAYER, (Player.X_POS, self.y_pos), Player.RADIUS)
-
-    def restart(self):
-        self.y_pos = WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH-Player.RADIUS-1
-        self.y_vel = 0
+    def close(self):
+        pass
 
 
-class Game:
-    def __init__(self):
-        self.player = Player()
-        self.obstacles = []
+def play(obstacle_density, obstacle_gap_size):
+    pygame.init()
+    pygame.font.init()
 
-        obstacle_offset_range = (WINDOW_HEIGHT - LEVEL_BOUNDS_WIDTH*2 - Obstacle.GAP_SIZE - Obstacle.MIN_PADDING*2)//2
-        self.obstacle_range = (WINDOW_HEIGHT//2-obstacle_offset_range, WINDOW_HEIGHT//2+obstacle_offset_range)
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    font = pygame.font.Font(None, 36)
 
-        self.spawn_obstacle(WINDOW_WIDTH)
-        self.spawn_obstacle(WINDOW_WIDTH*1.5)
-        self.font = pygame.font.Font(None, 36)
-        self.score = 0
+    game = Game(obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 100)
+    clock = pygame.time.Clock()  
+    running = True
 
-    def restart(self):
-        self.score = 0
-        self.player.restart()
-        self.obstacles = []
-        self.spawn_obstacle(WINDOW_WIDTH)
-        self.spawn_obstacle(WINDOW_WIDTH*1.5)
+    while running:
+        dt = clock.tick(60) / 1000.0
 
-    def spawn_obstacle(self, x_pos):
-        self.obstacles.append(Obstacle(x_pos, random.randint(self.obstacle_range[0], self.obstacle_range[1])))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # Left click
+                    game.mouse_click()
 
-    def update(self, dt):
-        for ob in self.obstacles:
-            ob.update(dt)
-            if ob.collides_with_player(self.player.X_POS, self.player.y_pos):
-                self.restart()
-            if ob.count_as_passed(self.player.X_POS, self.player.y_pos):
-                self.score += 1
+        if game.is_playing() == False:
+            game.restart()
 
-        self.obstacles = [ob for ob in self.obstacles if not ob.is_off_screen()]
+        game.update(dt)
+        game.draw(screen, font)
+        pygame.display.flip()
 
-        self.player.update(dt)
+    pygame.quit()
 
-        if len(self.obstacles) < 2:
-            self.spawn_obstacle(WINDOW_WIDTH)
+def train(initial_model_file, obstacle_density, obstacle_gap_size):
 
-    def mouse_click(self):
-        self.player.jump()
+    env = JetpackEnv(render=False, obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 12)
+    eval_env = JetpackEnv(render=False, obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 12)
 
-    def draw(self, screen):
-        screen.fill(COLOR_BG)
+    stop_callback = StopTrainingOnNoModelImprovement(
+        max_no_improvement_evals=10,    
+        min_evals=5,                    # how many evals to wait before checking      
+        verbose=1
+    )
 
-        for ob in self.obstacles:
-            ob.draw(screen)
+    eval_callback = EvalCallback(
+        eval_env,
+        best_model_save_path=f"./models/dens_{obstacle_density}_gap_{obstacle_gap_size}",
+        log_path="./logs/",
+        eval_freq=5000,          # evaluate every 5000 steps
+        deterministic=True,
+        render=False,
+        callback_after_eval=stop_callback
+    )
 
-        LEVEL_BOUNDS_WIDTH
-        pygame.draw.rect(screen, COLOR_BOUNDS, (0, 0, WINDOW_WIDTH, LEVEL_BOUNDS_WIDTH))
-        pygame.draw.rect(screen, COLOR_BOUNDS, (0, WINDOW_HEIGHT-LEVEL_BOUNDS_WIDTH, WINDOW_WIDTH, LEVEL_BOUNDS_WIDTH))
+    if initial_model_file is None:
+        model = PPO("MlpPolicy", env, verbose=1)
+    else:
+        model = PPO.load(f"./models/{initial_model_file}", env=env)
+    model.learn(total_timesteps=100_00, callback=eval_callback)
+  
+def test(initial_model_file, obstacle_density, obstacle_gap_size,  record = False):
+    env = JetpackEnv(render=True, obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 100)
+    model = PPO.load(f"./models/{initial_model_file}", env=env)
 
-        self.player.draw(screen)
+    if record:
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        video = cv2.VideoWriter(f"model_test_run_gap_{obstacle_gap_size}.mp4", fourcc, 30, (WINDOW_WIDTH, WINDOW_HEIGHT))
 
-        text_surface = self.font.render(f"score: {self.score}", True, (255, 255, 255))
-        screen.blit(text_surface, (5, 5))
+    obs, _ = env.reset()
+    done, truncated = False, False
+    while True:
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, done, truncated, _ = env.step(action)
+        env.render()
+
+        if record:
+            frame = pygame.surfarray.array3d(env.get_screen())
+            frame = np.transpose(frame, (1, 0, 2))
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            video.write(frame)    
+
+        time.sleep(1/30)
+        if done or truncated:
+            obs, _ = env.reset()
+            if record: # When recording stop playing to save a single run only
+                break
+
+    if record:
+        video.release()
+
+def evaluate(model_file, obstacle_density, obstacle_gap_size):
+    RUNS = 100
+    MAX_SCORE = 100
+   
+    env = JetpackEnv(render=False, obstacle_density = obstacle_density,
+    obstacle_gap_size = obstacle_gap_size, score_to_pass = MAX_SCORE)
+    model = PPO.load(f"./models/{model_file}", env=env)
 
 
-pygame.init()
-pygame.font.init()
+    scores = []
 
-screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-clock = pygame.time.Clock()
+    print()
+    print(f"Evaluation for {RUNS} runs, with max score limit {MAX_SCORE}")
+    print()
 
+    obs, _ = env.reset()
+    done, truncated = False, False
+    while len(scores) < RUNS:
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, done, truncated, _ = env.step(action)
+        if done or truncated or env.get_score() >= MAX_SCORE:
+            scores.append(env.get_score())
+            print(f"score: {env.get_score()}")
+            obs, _ = env.reset()
+            done, truncated = False, False
 
-game = Game()
-clock = pygame.time.Clock()  
-running = True
+    print()
+    df = pd.DataFrame(scores, columns=["score"])
+    print(df.describe())
 
-while running:
-    dt = clock.tick(60) / 1000.0
+parser = argparse.ArgumentParser()
+parser.add_argument("--mode", choices=["train", "play", "test", "eval"], required=True,
+                    help="Run mode: train or play or test.")
+parser.add_argument("--file",
+                    help="The model to start training with or to evaluate, leave empty for new model. Path should be relative to models directory.")
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:  # Left click
-                game.mouse_click()
+parser.add_argument("--dens", type=int, required=True,
+                    help="How many obstacles on the screen.")
 
-    game.update(dt)
-    game.draw(screen)
-    pygame.display.flip()
+parser.add_argument("--gap", type=int, required=True,
+                    help="Obstacle gap size")
 
-pygame.quit()
+parser.add_argument("--record", action="store_true",
+                    help="Enable rendering during training")
+
+args = parser.parse_args()
+
+if args.mode == "play":
+    play(args.dens, args.gap)
+elif args.mode == "train":
+    train(args.file, args.dens, args.gap)
+elif args.mode == "test":
+    if args.file == None:
+        print("--file argument needed")
+        exit(1)
+    test(args.file, args.dens, args.gap, record = args.record)
+elif args.mode == "eval":
+    if args.file == None:
+        print("--file argument needed")
+        exit(1)
+    evaluate(args.file, args.dens, args.gap)
