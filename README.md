@@ -33,6 +33,8 @@ An MlpPolicy from Stable-Baselines3 is used. Models were trained with decreasing
 Satisfactory performance was achieved up to the gap sizes of 120 and 110. Model trained on 110 gap size performed better on 120 gap size obstacles than 120 gap size model, even though it performed very poorly on the gap size of 110. The evaluations run the game 100 times, with upper score limit of 100. All scenarios have relativly high standard deviations, sometimes reaching scores from 0 or 1 obstacles up to 100, showing poor consistency.
 
 ### 110 gap size model on 120 gap size obstacles
+
+```
 score
 count  100.000000
 mean    57.370000
@@ -42,6 +44,7 @@ min      0.000000
 50%     58.500000
 75%    100.000000
 max    100.000000
+```
 
 ### 120 gap size model on 120 gap size obstacles
 
