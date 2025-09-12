@@ -139,7 +139,7 @@ def test(initial_model_file, obstacle_density, obstacle_gap_size,  record = Fals
 
     if record:
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        video = cv2.VideoWriter(f"model_test_run_gap{obstacle_gap_size}.mp4", fourcc, 30, (WINDOW_WIDTH, WINDOW_HEIGHT))
+        video = cv2.VideoWriter(f"model_test_run_gap_{obstacle_gap_size}.mp4", fourcc, 30, (WINDOW_WIDTH, WINDOW_HEIGHT))
 
     obs, _ = env.reset()
     done, truncated = False, False
