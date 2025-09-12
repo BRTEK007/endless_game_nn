@@ -1,5 +1,7 @@
 # endless_runner_nn
 
+![Can't load thumbnail.png](./thumbnail.png)
+
 Simple endless runner game, player has to pass oncoming obstacles. Player only has one action, to jump. Program can be run in 4 modes:
 
 ### training
@@ -24,9 +26,10 @@ Adjustable game parameters:
 
 An MlpPolicy from Stable-Baselines3 is used. Models were trained with decreasing obstacle gap, with the model trained on the higher gap used as a starting point for new training. Untrained model struggles to find random success in the beggining for obstacle density < 3. During training the game was limited to stop after the player passes 12 obstacles.
 
-# Resulst
+# Results
 
-TODO: video, picture, evaluations, 110 on 110, 120 on 120, 110 on 120
+![Can't load model_test_run_gap_120.gif](./model_test_run_gap_120.gif)
+
 
 # Example training
 ```
