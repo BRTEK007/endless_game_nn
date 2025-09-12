@@ -24,6 +24,10 @@ Adjustable game parameters:
 
 An MlpPolicy from Stable-Baselines3 is used. Models were trained with decreasing obstacle gap, with the model trained on the higher gap used as a starting point for new training. Untrained model struggles to find random success in the beggining for obstacle density < 3. During training the game was limited to stop after the player passes 12 obstacles.
 
+# Resulst
+
+TODO: video, picture, evaluations, 110 on 110, 120 on 120, 110 on 120
+
 # Example training
 ```
 python3 main.py --mode train --file dens_3_gap_120/best_model.zip --dens 3 --gap 120

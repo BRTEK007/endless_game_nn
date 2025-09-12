@@ -9,6 +9,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
 
 import pandas as pd
+import cv2
 
 class JetpackEnv(gym.Env):
     def __init__(self, render = False, obstacle_density = 2, obstacle_gap_size = 200, score_to_pass = 12):
@@ -60,6 +61,9 @@ class JetpackEnv(gym.Env):
 
     def get_score(self):
         return self.game.score
+
+    def get_screen(self):
+        return self.screen
 
     def _get_obs(self):
         return np.array(self.game.game_state(), dtype=np.float32)
@@ -129,9 +133,13 @@ def train(initial_model_file, obstacle_density, obstacle_gap_size):
         model = PPO.load(f"./models/{initial_model_file}", env=env)
     model.learn(total_timesteps=100_00, callback=eval_callback)
   
-def test(initial_model_file, obstacle_density, obstacle_gap_size):
+def test(initial_model_file, obstacle_density, obstacle_gap_size,  record = False):
     env = JetpackEnv(render=True, obstacle_density = obstacle_density, obstacle_gap_size = obstacle_gap_size, score_to_pass = 100)
     model = PPO.load(f"./models/{initial_model_file}", env=env)
+
+    if record:
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        video = cv2.VideoWriter(f"model_test_run_gap{obstacle_gap_size}.mp4", fourcc, 30, (WINDOW_WIDTH, WINDOW_HEIGHT))
 
     obs, _ = env.reset()
     done, truncated = False, False
@@ -139,9 +147,21 @@ def test(initial_model_file, obstacle_density, obstacle_gap_size):
         action, _ = model.predict(obs, deterministic=True)
         obs, reward, done, truncated, _ = env.step(action)
         env.render()
+
+        if record:
+            frame = pygame.surfarray.array3d(env.get_screen())
+            frame = np.transpose(frame, (1, 0, 2))
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            video.write(frame)    
+
         time.sleep(1/30)
         if done or truncated:
             obs, _ = env.reset()
+            if record: # When recording stop playing to save a single run only
+                break
+
+    if record:
+        video.release()
 
 def evaluate(model_file, obstacle_density, obstacle_gap_size):
     RUNS = 50
@@ -185,6 +205,9 @@ parser.add_argument("--dens", type=int, required=True,
 parser.add_argument("--gap", type=int, required=True,
                     help="Obstacle gap size")
 
+parser.add_argument("--record", action="store_true",
+                    help="Enable rendering during training")
+
 args = parser.parse_args()
 
 if args.mode == "play":
@@ -195,7 +218,7 @@ elif args.mode == "test":
     if args.file == None:
         print("--file argument needed")
         exit(1)
-    test(args.file, args.dens, args.gap)
+    test(args.file, args.dens, args.gap, record = args.record)
 elif args.mode == "eval":
     if args.file == None:
         print("--file argument needed")
