@@ -164,7 +164,7 @@ def test(initial_model_file, obstacle_density, obstacle_gap_size,  record = Fals
         video.release()
 
 def evaluate(model_file, obstacle_density, obstacle_gap_size):
-    RUNS = 50
+    RUNS = 100
     MAX_SCORE = 100
    
     env = JetpackEnv(render=False, obstacle_density = obstacle_density,
