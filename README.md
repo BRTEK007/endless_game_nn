@@ -34,44 +34,15 @@ Satisfactory performance was achieved up to the gap sizes of 120 and 110. Model 
 
 ### 110 gap size model on 120 gap size obstacles
 
-```
-score
-count  100.000000
-mean    57.370000
-std     38.510829
-min      0.000000
-25%     19.250000
-50%     58.500000
-75%    100.000000
-max    100.000000
-```
+![Can't load eval_graph_model_110_gap_120.png](./eval_graph_model_110_gap_120.png)
 
 ### 120 gap size model on 120 gap size obstacles
 
-```
-            score
-count  100.000000
-mean    42.410000
-std     33.188198
-min      1.000000
-25%     15.000000
-50%     33.500000
-75%     74.000000
-max    100.000000
-```
+![Can't load eval_graph_model_120_gap_120.png](./eval_graph_model_120_gap_120.png)
 
 ### 110 gap size model on 110 gap size obstacles
-```
-           score
-count  100.00000
-mean     6.26000
-std      5.79554
-min      0.00000
-25%      2.00000
-50%      4.00000
-75%      8.00000
-max     30.00000
-```
+
+![Can't load eval_graph_model_110_gap_110.png](./eval_graph_model_110_gap_110.png)
 
 
 # Example training

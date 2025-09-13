@@ -8,6 +8,7 @@ from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import cv2
 
@@ -171,7 +172,6 @@ def evaluate(model_file, obstacle_density, obstacle_gap_size):
     obstacle_gap_size = obstacle_gap_size, score_to_pass = MAX_SCORE)
     model = PPO.load(f"./models/{model_file}", env=env)
 
-
     scores = []
 
     print()
@@ -192,6 +192,16 @@ def evaluate(model_file, obstacle_density, obstacle_gap_size):
     print()
     df = pd.DataFrame(scores, columns=["score"])
     print(df.describe())
+
+    plt.figure(figsize=(6,4))
+    plt.hist(df["score"], bins=50, edgecolor="black")
+    plt.xlabel("Score")
+    plt.ylabel("Number of runs")
+    plt.title("Score Frequency")
+    plt.tight_layout()
+    plt.savefig(f"eval_graph_gap_{obstacle_gap_size}.png", dpi=150)
+    plt.close()
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", choices=["train", "play", "test", "eval"], required=True,
